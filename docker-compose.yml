@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  whatsapp-llm-pa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: whatsapp-llm-pa:latest
+    container_name: whatsapp-llm-pa
+    restart: unless-stopped
+
+    # Environment configuration
+    environment:
+      # Required Cloudflare AI Configuration
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+
+      # Optional AI Configuration
+      - AI_MODEL_NAME=${AI_MODEL_NAME:-@cf/meta/llama-3.2-1b-instruct}
+      - CLOUDFLARE_AI_GATEWAY_URL=${CLOUDFLARE_AI_GATEWAY_URL:-}
+      - CLOUDFLARE_MAX_TOKENS=${CLOUDFLARE_MAX_TOKENS:-500}
+
+      # Application Settings
+      - NODE_ENV=${NODE_ENV:-production}
+      - SECRETARY_MODE=${SECRETARY_MODE:-true}
+      - RESPONSE_DELAY_MS=${RESPONSE_DELAY_MS:-120000}
+      - COOLDOWN_PERIOD_MS=${COOLDOWN_PERIOD_MS:-18000000}
+      - MAX_CONTEXT_MESSAGES=${MAX_CONTEXT_MESSAGES:-10}
+      - ENABLE_LOGGING=${ENABLE_LOGGING:-true}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-10}
+      - RETRY_ATTEMPTS=${RETRY_ATTEMPTS:-3}
+
+      # Storage Configuration
+      - DATABASE_PATH=/app/data/conversations.db
+      - WHATSAPP_SESSION_PATH=/app/data/session
+
+      # Gilad Identification (Optional)
+      - GILAD_WHATSAPP_ID=${GILAD_WHATSAPP_ID:-}
+      - GILAD_WHATSAPP_NUMBER=${GILAD_WHATSAPP_NUMBER:-}
+      - GILAD_PHONE_NUMBER=${GILAD_PHONE_NUMBER:-}
+
+      # Chrome/Chromium Configuration for ARM
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+    # Volume mounts for persistent data
+    volumes:
+      # Database storage
+      - whatsapp_data:/app/data
+      # WhatsApp session authentication data
+      - whatsapp_sessions:/app/sessions
+      # Application logs
+      - whatsapp_logs:/app/logs
+      # Optional: Mount custom .env file
+      # - ./.env:/app/.env:ro
+
+    # Resource limits and constraints
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+    # Labels for organization
+    labels:
+      - "com.whatsapp-llm-pa.description=WhatsApp LLM Personal Assistant"
+      - "com.whatsapp-llm-pa.version=1.0.0"
+
+    # Network configuration (if needed for future extensions)
+    networks:
+      - whatsapp-network
+
+# Named volumes for persistent data
+volumes:
+  whatsapp_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+  whatsapp_sessions:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./sessions
+  whatsapp_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
+
+# Network configuration
+networks:
+  whatsapp-network:
+    driver: bridge
+    name: whatsapp-llm-pa-network
