@@ -54,15 +54,10 @@ services:
       # Optional: Mount custom .env file
       # - ./.env:/app/.env:ro
 
-    # Resource limits and constraints
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
+    # Resource limits for Raspberry Pi 2 (using mem_limit instead of deploy)
+    mem_limit: 512m
+    memswap_limit: 1g
+    cpus: 0.5
 
     # Health check configuration
     healthcheck:

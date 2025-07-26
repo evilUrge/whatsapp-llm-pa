@@ -1,5 +1,5 @@
 # Multi-stage ARM-compatible Dockerfile for WhatsApp LLM Personal Assistant
-# Optimized for ARM64/Apple Silicon with Chrome/Chromium support
+# Optimized for ARM32 (Raspberry Pi 2/3) and ARM64 with Chrome/Chromium support
 
 # Build stage
 FROM node:18-bullseye AS builder
@@ -8,14 +8,29 @@ FROM node:18-bullseye AS builder
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 
+# Install build tools and dependencies for native module compilation on ARM
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    gcc \
+    build-essential \
+    sqlite3 \
+    libsqlite3-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies (including dev dependencies for build)
-RUN npm ci --include=dev
+# Install dependencies with verbose logging and specific sqlite3 configuration for ARM
+RUN npm config set sqlite3_binary_site https://mapbox-node-binary.s3.amazonaws.com && \
+    npm config set target_arch arm && \
+    npm config set sqlite /usr/bin && \
+    npm ci --include=dev --verbose
 
 # Copy source code
 COPY src/ ./src/
@@ -28,6 +43,12 @@ FROM node:18-bullseye-slim AS production
 
 # Install system dependencies for Chrome/Chromium and ARM compatibility
 RUN apt-get update && apt-get install -y \
+    # Build tools needed for native modules in production
+    python3 \
+    make \
+    g++ \
+    gcc \
+    build-essential \
     # Chrome/Chromium dependencies
     chromium \
     chromium-sandbox \
@@ -52,14 +73,12 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
     libappindicator3-1 \
-    libasound2 \
-    libatk-bridge2.0-0 \
     libnspr4 \
-    libnss3 \
     lsb-release \
     xdg-utils \
     # SQLite3 for database management
     sqlite3 \
+    libsqlite3-dev \
     # Clean up
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -78,9 +97,12 @@ WORKDIR /app
 RUN mkdir -p /app/data /app/sessions /app/logs \
     && chown -R whatsapp:whatsapp /app
 
-# Copy package files and install production dependencies
+# Copy package files and install production dependencies with ARM sqlite3 config
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm config set sqlite3_binary_site https://mapbox-node-binary.s3.amazonaws.com && \
+    npm config set target_arch arm && \
+    npm config set sqlite /usr/bin && \
+    npm ci --only=production --verbose && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
